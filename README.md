@@ -1,6 +1,8 @@
 # Jugnu
 
-A personal voice assistant. Jugnu is Hindi for firefly: a small light that glows when it wakes. It also stands for Just a Useful Gadget, Not Ultron.
+A personal voice assistant. Jugnu is Hindi for firefly: a small light that glows when it wakes. It also stands for:
+
+## Just a Useful Gadget, Not Ultron.
 
 Say "Hey Jugnu, ..." and talk. The brain you chose answers, and Jugnu says it out loud.
 
