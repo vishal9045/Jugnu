@@ -1,0 +1,5 @@
+# Voice and ears on your own NVIDIA GPU (private mode, or JUGNU_SENSES=local). A few GB.
+# Setup installs these when you choose them; by hand:
+#   uv pip install -r requirements-local.txt --torch-backend cu128 --override gpu-overrides.txt
+chatterbox-tts
+transformers  # Whisper

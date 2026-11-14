@@ -1,0 +1,9 @@
+# Jugnu's face: the colour for a model or a council member. One per line:  name = colour
+# The name can be part of a model's name (qwen matches qwen3:8b) or a council member as setup names
+# them (Claude, GPT, Gemini, DeepSeek, Grok, OpenRouter, Local model, Other server).
+# The colour is a colour name (teal, orange, hotpink) or a #hex code. Changes show within seconds.
+# Anything not listed keeps its own colour; a model Jugnu doesn't know gets one worked out from its name.
+# Or just tell it: "make Qwen teal".
+#
+# qwen = teal
+# Grok = #ff8800

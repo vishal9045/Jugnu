@@ -1,0 +1,18 @@
+claude-agent-sdk
+python-dotenv
+# The hearing is pinned to the versions it was tuned on (echo canceller, speech detector and the
+# maths under them): newer ones install, but nobody has listened through them yet.
+scipy==1.17.1
+numpy==1.26.4
+requests
+sounddevice
+setuptools<81
+onnxruntime==1.31.1  # runs the speech detector (models/silero_vad.onnx)
+google-cloud-speech  # the ears
+livekit==1.2.0  # cancels its own voice out of the mic
+pystray
+pywebview[pyside6]  # Qt: lets the face float see-through; also the setup window
+pypdf  # Argon reads PDFs with it
+pillow  # vision: takes the picture of your screen
+# Voice and ears on your own GPU (private mode): requirements-local.txt, installed by setup when chosen
+mcp  # other brains reach the browser and Google tools with it (Claude's SDK brings it too)

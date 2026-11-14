@@ -1,0 +1,16 @@
+.env
+logs/
+.venv/
+__pycache__/
+samples/
+about_me.md
+_to_delete/
+personality.md
+Jugnu.lnk
+heard.txt
+pronunciations.txt
+_next/
+_previous/
+models/voice.onnx
+models/voice.part
+.playwright-mcp/

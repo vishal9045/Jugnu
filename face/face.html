@@ -1,0 +1,481 @@
+<title>Jugnu</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400&display=swap">
+<style>
+/* One projected face on a dark field; a single line of state below it. Nothing else.
+   Driven by Jugnu, the field and the line go: the face floats over whatever is behind it. */
+:root {
+  --void: #03060a;
+  --ink: #8fb9c9;
+  --ink-dim: #46626e;
+  --line: #112c38;
+  --focus: #9fe6ff;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; overflow: hidden;
+  background: radial-gradient(ellipse 70% 60% at 50% 55%, #050a10, var(--void) 70%);
+  color: var(--ink); font-family: var(--mono);
+}
+#stage { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
+.bar {
+  position: fixed; left: 0; right: 0;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; align-items: center; gap: 13px;
+}
+.state {
+  font-weight: 300; font-size: 11px; letter-spacing: 0.34em; text-transform: uppercase;
+  color: var(--ink-dim); font-variant-numeric: tabular-nums;
+}
+.state b { font-weight: 400; color: var(--ink); }
+.modes { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.modes button {
+  font: 300 11px/1 var(--mono); letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-dim); background: transparent; cursor: pointer;
+  border: 1px solid transparent; border-radius: 2px; padding: 9px 12px;
+  transition: color .3s, border-color .3s;
+}
+.modes button:hover { color: var(--ink); }
+.modes button[aria-pressed="true"] { color: var(--ink); border-color: var(--line); }
+.modes button:focus-visible { outline: 1px solid var(--focus); outline-offset: 2px; }
+body.driven .bar { display: none; }
+html:has(body.float), body.float { background: transparent; }   /* only where the window can float */
+/* Learning mode: the line to read, inside the ring. Readable over whatever is behind a floating face. */
+#say { position: fixed; transform: translate(-50%, -50%); width: 30vmin; text-align: center; pointer-events: none;
+       font: 600 clamp(13px, 3.4vmin, 30px)/1.25 system-ui, "Segoe UI", sans-serif; color: #f4f7f9;
+       text-shadow: 0 0 2px #000, 0 0 10px #000, 0 0 18px #000; opacity: 0; transition: opacity .5s; }
+#say.on { opacity: 1; }
+/* Vision: while it can see the screen, the face says so */
+body.seeing::after { content: "\1F441\00A0 seeing your screen"; position: fixed; left: 50%; bottom: 7vmin; transform: translateX(-50%);
+       font: 600 clamp(11px, 2.8vmin, 24px) system-ui, "Segoe UI", sans-serif; color: #f4f7f9; letter-spacing: .06em;
+       white-space: nowrap; pointer-events: none; text-shadow: 0 0 2px #000, 0 0 10px #000, 0 0 18px #000; }
+#say small { display: block; margin-top: .5em; font-weight: 400; font-size: .6em; opacity: .85; letter-spacing: .06em; }
+</style>
+
+<canvas id="stage" aria-label="The assistant, as an orb of light"></canvas>
+<div id="say" aria-live="polite"></div>
+<div class="bar">
+  <div class="state" aria-live="polite"><b id="state-word">listening</b></div>
+  <div class="modes" role="group" aria-label="Preview a state">
+    <button type="button" id="m-asleep" data-mode="asleep">Asleep</button>
+    <button type="button" id="m-listening" data-mode="listening" aria-pressed="true">Listening</button>
+    <button type="button" id="m-thinking" data-mode="thinking">Thinking</button>
+    <button type="button" id="m-talking" data-mode="talking">Talking</button>
+  </div>
+  <div class="modes tints" role="group" aria-label="Preview a colour">
+    <button type="button" data-tint="" aria-pressed="true">Cycle</button>
+    <button type="button" data-tint="haiku">Cyan</button>
+    <button type="button" data-tint="sonnet">Amber</button>
+    <button type="button" data-tint="opus">Violet</button>
+    <button type="button" data-tint="argon">Green</button>
+    <button type="button" data-tint="gpt">Silver</button>
+    <button type="button" data-tint="private">Ruby</button>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"./three/build/three.module.js","three/addons/":"./three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from "./three/build/three.module.js";   // bundled in face/three (three.js 0.160, MIT): no internet needed
+
+// ---- the orb: points of light on a sphere, a denser core inside, and dust rising from the light below.
+// Nothing here is a likeness: it is all worked out from a few numbers, so it has no face, age or gender.
+const NS = 44000, NC = 3200, ND = 360, N = NS + NC + ND;   // shell, core, dust
+const R = 0.85, GAP = 0.4, BASE = -1.2;                    // radius; how far it floats above the light; the light
+const pos = new Float32Array(N * 3), nor = new Float32Array(N * 3);
+const bright = new Float32Array(N), kind = new Float32Array(N), rnd = new Float32Array(N);
+let seed = 11; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const unit = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+for (let i = 0; i < NS; i++) {       // the shell: spread evenly (a sunflower's spiral), nudged so no pattern shows
+  const y = 1 - 2 * (i + 0.5) / NS, r = Math.sqrt(1 - y * y), a = i * Math.PI * (3 - Math.sqrt(5));
+  const n = unit(Math.cos(a) * r + (rand() - 0.5) * 0.02, y + (rand() - 0.5) * 0.02, Math.sin(a) * r + (rand() - 0.5) * 0.02);
+  nor.set(n, 3 * i); pos.set(n.map(v => v * R), 3 * i);
+  bright[i] = 0.3 + 0.7 * rand(); kind[i] = 0; rnd[i] = rand();
+}
+for (let i = NS; i < NS + NC; i++) { // the core: a small cloud at the centre, densest in the middle
+  const y = rand() * 2 - 1, r = Math.sqrt(1 - y * y), a = rand() * Math.PI * 2;
+  nor.set([Math.cos(a) * r, y, Math.sin(a) * r], 3 * i);
+  bright[i] = rand(); kind[i] = 1; rnd[i] = rand();
+}
+for (let i = NS + NC; i < N; i++) {  // dust: a stream rising from the light toward the orb
+  const a = rand() * Math.PI * 2, r = 0.26 * Math.sqrt(rand());
+  pos.set([Math.cos(a) * r, 0, Math.sin(a) * r * 0.5], 3 * i);
+  nor.set([0, 0, 1], 3 * i); bright[i] = 0.5; kind[i] = 3; rnd[i] = rand();
+}
+const geo = new THREE.BufferGeometry();
+geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+geo.setAttribute("aNormal", new THREE.BufferAttribute(nor, 3));
+geo.setAttribute("aBright", new THREE.BufferAttribute(bright, 1));
+geo.setAttribute("aKind", new THREE.BufferAttribute(kind, 1));
+geo.setAttribute("aRand", new THREE.BufferAttribute(rnd, 1));
+
+const U = {
+  uTime: {value: 0}, uPR: {value: 1}, uScale: {value: 1},
+  uOut: {value: 0}, uIn: {value: 0}, uBands: {value: new Array(8).fill(0)},
+  uSleep: {value: 0}, uListen: {value: 1}, uThink: {value: 0}, uTalk: {value: 0}, uSpin: {value: 0},
+  uLearn: {value: 0}, uDone: {value: 0},  // learning mode: how far it has opened into a ring, and how much is filled
+  uPresence: {value: 0}, uBase: {value: -(R + GAP)}, uGlow: {value: 0}, uBoost: {value: 1}, uGain: {value: 1},
+  uDeep: {value: new THREE.Color(0.10, 0.42, 0.66)}, uBright: {value: new THREE.Color(0.74, 0.94, 1.0)},
+  uAccent: {value: new THREE.Color(1, 1, 1)}, uAccentMix: {value: 0},  // an adviser being consulted
+};
+
+const material = new THREE.ShaderMaterial({
+  uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `
+    uniform float uTime, uOut, uIn, uSleep, uListen, uThink, uTalk, uSpin, uLearn, uDone;
+    uniform float uBands[8];
+    uniform float uPR, uScale, uPresence, uBase, uBoost, uGain;
+    attribute vec3 aNormal; attribute float aBright, aKind, aRand;
+    varying float vAlpha, vHeat, vCore, vAccent;
+    const float R = ${R.toFixed(3)};
+    vec3 turn(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(c * v.x + s * v.z, v.y, c * v.z - s * v.x); }
+    vec3 lean(vec3 v) { return vec3(0.9553 * v.x - 0.2955 * v.y, 0.2955 * v.x + 0.9553 * v.y, v.z); }  // its axis, tipped 17 degrees
+    void main() {
+      float t = uTime;
+      float dust = step(2.5, aKind), core = step(0.5, aKind) - dust, shell = 1.0 - core - dust;
+      vec3 n0 = aNormal;
+      // it drifts round on its axis; thinking, its latitudes slide past each other
+      vec3 n = turn(n0, uSpin + uThink * 0.55 * sin(n0.y * 5.0 + t * 1.3));
+
+      // speaking: the voice's 8 bands wrap it as latitudes, low notes at the equator, high at the poles
+      float f = abs(n.y) * 7.0;
+      int i0 = int(floor(f)); int i1 = i0 < 7 ? i0 + 1 : 7;
+      float band = mix(uBands[i0], uBands[i1], fract(f)) * (0.75 + 0.25 * sin(atan(n.z, n.x) * 3.0 + t * 2.0 + f));
+      float talk = uTalk * uOut;
+      // thinking: a band of light travels from pole to pole
+      float sweep = 1.25 - mod(t * 0.5, 2.5);
+      float scan = uThink * exp(-pow((n.y - sweep) * 5.0, 2.0)) * shell;
+      vec3 dir = lean(n);
+      // listening: your voice arrives as ripples closing in on the side that faces you, and it draws in a little
+      float facing = acos(clamp(dir.z, -1.0, 1.0));
+      float hear = uListen * uIn;
+
+      float rad = R * (1.0
+        + 0.012 * sin(t * 0.8 + aRand * 6.2832)                                                          // never quite still
+        + 0.03 * sin(n0.x * 3.1 + t * 0.6) * sin(n0.y * 2.7 - t * 0.45) * sin(n0.z * 3.3 + t * 0.5)     // a slow swell
+        + uTalk * band * (0.22 + 0.025 * sin(n.y * 40.0 - t * 12.0)) + 0.05 * talk
+        + hear * (0.035 * sin(facing * 12.0 + t * 8.0) - 0.04)
+        - 0.07 * uThink + 0.035 * scan - 0.05 * uSleep);
+      vec3 p = dir * rad;
+      float heat = scan * 0.6 + uTalk * band * 0.9 + hear * 0.3;
+      if (core > 0.5) {   // the core swells with the voice, tightens and quickens in thought
+        p = lean(turn(n0, -2.0 * uSpin)) * 0.30 * pow(aRand, 0.6) * (1.0 + 0.9 * talk + 0.5 * hear - 0.3 * uThink);
+        heat = 0.5 * talk + 0.4 * uThink + 0.3 * hear;
+      }
+      float rise = fract(aRand * 7.31 + t * 0.07);                 // dust: 0 at the light, 1 under the orb
+      if (dust > 0.5) p = vec3(position.x * (1.0 - 0.5 * rise), uBase - 0.06 + rise * 0.62, position.z * (1.0 - 0.5 * rise));
+
+      // learning mode: it opens out into a flat ring facing you, which fills clockwise from the top, a
+      // stretch for each line read. No model does this, so it can't be mistaken for a change of brain.
+      float ang = atan(n0.x, n0.y);
+      float lit = step(fract(ang / 6.2832 + 1.0), uDone * 1.02);
+      float ring = uLearn * (1.0 - dust);
+      float rr = R * (core > 0.5 ? 0.66 + 0.04 * aRand : 0.96 + 0.16 * aRand) * (1.0 + 0.012 * sin(t * 1.4 + ang * 3.0));
+      p = mix(p, vec3(sin(ang) * rr, cos(ang) * rr, 0.05 * n0.z), ring);
+      heat = mix(heat, 0.22 * lit + 0.25 * uListen * uIn, ring);
+
+      // waking, it rises out of the light, underside first; sleeping, it sinks back in
+      float h = clamp((p.y - uBase) / 2.4, 0.0, 1.0);
+      float delay = h * 0.55 + aRand * 0.25;
+      float e = mix(smoothstep(delay, delay + 0.2, uPresence), uPresence, dust);
+      float es = e * e * (3.0 - 2.0 * e);
+      p = mix(vec3(p.x * 0.1, uBase - 0.08, p.z * 0.1), p, es);
+      heat += 3.0 * e * (1.0 - e) * (1.0 - dust);                  // points glow while they travel
+
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      vec3 nv = normalize(normalMatrix * dir);
+      float rim = pow(1.0 - abs(nv.z), 2.0);
+      float near = mix(0.38, 1.0, smoothstep(-0.5, 0.3, nv.z));    // the far side shows through, fainter
+      // streaks of light and dark that ride with the surface, so you can see it turn and shear
+      float tex = 0.5 + 0.5 * sin(n0.y * 6.0 + 1.5 * sin(n0.x * 2.3 + t * 0.21) + 1.2 * sin(n0.z * 2.9 - t * 0.17));
+      float flicker = 0.9 + 0.1 * sin(t * (6.0 + aRand * 12.0) + aRand * 80.0);
+      float belt = exp(-pow(n0.y * 6.0, 2.0));                       // a brighter band round its middle: you can see the tilt
+      float body = (0.07 + 1.6 * pow(aBright, 1.3) * (0.1 + 0.9 * tex * tex * tex) + 0.4 * rim + 0.55 * belt * aBright) * near;
+      if (core > 0.5) body = 0.8 * (1.0 - 0.6 * aRand) * (0.6 + 0.4 * aBright);
+      body = mix(body, (0.1 + 0.42 * lit) * (0.4 + 0.6 * aBright) * (core > 0.5 ? 0.35 : 1.0), ring);
+      vAlpha = (body * flicker * (1.0 - 0.7 * uSleep) + heat * 0.45) * e;
+      if (dust > 0.5) vAlpha = 0.16 * sin(3.14159 * rise) * uPresence;
+      vAlpha *= uGain;                                             // brightness: yours to set (scroll)
+      vHeat = heat + 0.55 * aBright * tex + 0.3 * rim + 0.2 * belt + core * 0.45;
+      vHeat = mix(vHeat, 0.05 + 0.95 * lit, ring);
+      vCore = core + aBright * 0.4;
+      vAccent = clamp(core + scan * 1.6, 0.0, 1.0);                // the core and the thinking band carry the adviser's color
+      float size = uBoost * (3.0 + aBright * 0.6 + core * 0.5 + heat * 1.8) * uPR * uScale / -mv.z;
+      // the same look on any screen: sub-pixel points grow to stay crisp (dimmed to keep their
+      // light), and points on a big high-DPI window stop growing before they merge into white
+      gl_PointSize = clamp(size, 1.7, 6.5);
+      vAlpha *= min(1.0, size * size / (1.7 * 1.7));
+    }`,
+  fragmentShader: `
+    uniform vec3 uDeep, uBright, uAccent;
+    uniform float uAccentMix;
+    varying float vAlpha, vHeat, vCore, vAccent;
+    void main() {
+      float r = length(gl_PointCoord - 0.5);
+      float core = smoothstep(0.17 + 0.05 * vCore, 0.0, r);
+      float halo = exp(-r * r * 18.0) * 0.3;
+      vec3 col = mix(uDeep, uBright, clamp(0.18 + vHeat * 0.8, 0.0, 1.0));  // the brain's color
+      col = mix(col, uAccent, uAccentMix * vAccent);
+      gl_FragColor = vec4(col, (core + halo) * vAlpha);
+    }`,
+});
+
+// ---- scene ----
+const canvas = document.getElementById("stage");
+let driven = false;
+const renderer = new THREE.WebGLRenderer({canvas, antialias: true, alpha: true});
+renderer.setClearColor(0x000000, 0);   // see-through: the page behind (or the desktop) shows
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 50);
+camera.position.set(0, 0, 6.6);
+const base = BASE, centre = BASE + GAP + R;
+
+// the emitter: a soft line of light the orb rises from, like a projection's source
+const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), new THREE.ShaderMaterial({
+  uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform float uGlow; uniform vec3 uDeep, uBright; varying vec2 vUv;
+    void main(){ vec2 q = (vUv - 0.5) * vec2(3.2, 0.9);
+      float g = exp(-q.x * q.x * 3.5 - q.y * q.y * 70.0) * 0.5 + exp(-q.x * q.x * 0.8 - q.y * q.y * 8.0) * 0.1;
+      gl_FragColor = vec4(mix(uDeep, uBright, 0.75), g * uGlow * smoothstep(1.15, 0.55, abs(q.x))); }`,  // tapers out well inside the window
+}));
+glow.position.set(0, base - 0.05, 0.1);
+
+// a soft light inside it, so it reads as a lit volume, not an empty shell; it swells with either voice
+const inner = new THREE.Mesh(new THREE.PlaneGeometry(R * 3.2, R * 3.2), new THREE.ShaderMaterial({
+  uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform float uPresence, uOut, uIn, uTalk, uListen, uThink, uSleep, uGain, uLearn; uniform vec3 uDeep, uBright; varying vec2 vUv;
+    void main(){ float d = length(vUv - 0.5) * 3.2;                    // 1.0 at the orb's surface
+      float fill = smoothstep(1.05, 0.0, d);
+      float g = 0.09 * fill * fill + 0.2 * exp(-d * d * 14.0) * (1.0 + 1.6 * uTalk * uOut + 0.8 * uListen * uIn + 0.5 * uThink);
+      gl_FragColor = vec4(mix(uDeep, uBright, 0.3 + 0.55 * exp(-d * d * 10.0)), g * smoothstep(0.7, 1.0, uPresence) * (1.0 - 0.7 * uSleep) * (1.0 - 0.9 * uLearn) * uGain); }`,   // as a ring, the middle is for the words
+}));
+
+const orb = new THREE.Points(geo, material);
+orb.position.y = centre;
+orb.frustumCulled = false;             // its points move in the shader; never let a stale box hide it
+inner.position.set(0, centre, -0.05);
+scene.add(glow, inner, orb);
+
+// ---- bloom, so the light bleeds the way a projection does ----
+let composer = null, finalPass = null;
+try {
+  const [cm, rp, bp, sp] = await Promise.all([
+    import("three/addons/postprocessing/EffectComposer.js"),
+    import("three/addons/postprocessing/RenderPass.js"),
+    import("three/addons/postprocessing/UnrealBloomPass.js"),
+    import("three/addons/postprocessing/ShaderPass.js"),
+  ]);
+  composer = new cm.EffectComposer(renderer);
+  composer.addPass(new rp.RenderPass(scene, camera));
+  // no OutputPass: these shaders already write final colour, and converting twice washes it out
+  const bloom = new bp.UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.75, 0.12);
+  composer.addPass(bloom);
+  // light, not paint: each pixel is as opaque as it is bright, so the glow sits on the desktop
+  // over a desktop, a faint smoked-glass shade behind the head gives the light something to read against
+  composer.addPass(finalPass = new sp.ShaderPass({
+    uniforms: {tDiffuse: {value: null}, uHaze: {value: 0}, uCenter: {value: new THREE.Vector2(0.5, 0.5)},
+               uRadius: {value: new THREE.Vector2(0.3, 0.3)}},
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float uHaze; uniform vec2 uCenter, uRadius; varying vec2 vUv;
+      void main(){ vec3 c = clamp((texture2D(tDiffuse, vUv).rgb - 0.012) / 0.988, 0.0, 1.0);  // no faint glow filling the window
+        vec2 d = (vUv - uCenter) / uRadius;
+        float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+        float shade = uHaze * 0.34 * exp(-dot(d, d) * 1.3) * smoothstep(0.0, 0.15, edge);  // nothing at the window's edge
+        gl_FragColor = vec4(c, max(shade, max(c.r, max(c.g, c.b)))); }`,
+  }));
+} catch (e) { composer = null; }   // no bloom is a softer picture, not a broken one
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(w, h, false);
+  if (composer) composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.fov = w / h < 0.8 ? 34 : 27;
+  camera.position.y = base + 6.6 * Math.tan(camera.fov * Math.PI / 360) * (driven ? 0.93 : 0.66);
+  camera.updateProjectionMatrix();
+  U.uPR.value = renderer.getPixelRatio();
+  U.uScale.value = Math.min(w, h) / 160;
+}
+addEventListener("resize", resize); resize();
+
+// ---- state: driven by the assistant, or by the preview buttons ----
+const target = {mode: "listening", out: 0, in: 0, bands: new Array(8).fill(0)};
+const word = document.getElementById("state-word");
+const sayEl = document.getElementById("say");
+const PLAIN = [[0.34, 0.36, 0.40], [1.0, 1.0, 1.0]];   // learning mode has no model's colour
+let lastModel = "";
+function setMode(m) {
+  target.mode = m; word.textContent = m;
+  document.querySelectorAll(".modes button[data-mode]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+}
+document.querySelectorAll(".modes button[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+let tint = "";                         // preview only: one colour held, or "" to show each in turn
+document.querySelectorAll(".tints button").forEach(b => b.addEventListener("click", () => {
+  tint = b.dataset.tint;
+  document.querySelectorAll(".tints button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+}));
+
+// Color says which brain is answering: the family is the hue, the version a visible shade of it.
+// [deep, bright] per model; a version not listed gets a shade worked out within its family.
+const PALETTES = {
+  "haiku-5.5":  [[0.10, 0.42, 0.66], [0.74, 0.94, 1.00]],   // cyan
+  "haiku-4.5":  [[0.12, 0.24, 0.64], [0.76, 0.84, 1.00]],   // steel blue
+  "sonnet-5.5": [[0.62, 0.34, 0.08], [1.00, 0.90, 0.70]],   // amber
+  "sonnet-5":   [[0.68, 0.22, 0.07], [1.00, 0.80, 0.66]],   // copper orange
+  "sonnet-4.5": [[0.56, 0.47, 0.10], [1.00, 0.97, 0.72]],   // pale gold
+  "opus-5.5":   [[0.38, 0.18, 0.70], [0.88, 0.80, 1.00]],   // violet
+  "opus-5":     [[0.56, 0.14, 0.60], [0.98, 0.80, 0.98]],   // magenta violet
+  "argon":      [[0.06, 0.50, 0.34], [0.74, 1.00, 0.86]],   // green (Gemini)
+  "gpt":        [[0.30, 0.34, 0.42], [0.92, 0.94, 1.00]],   // silver (GPT as the brain)
+  "deepseek":   [[0.08, 0.20, 0.70], [0.70, 0.80, 1.00]],   // royal blue (DeepSeek as the brain)
+  "grok":       [[0.42, 0.42, 0.40], [1.00, 1.00, 0.96]],   // white (Grok as the brain)
+  "private":    [[0.56, 0.03, 0.09], [1.00, 0.72, 0.74]],   // ruby red: private mode, nothing to Google
+};
+const NEWEST = {haiku: "haiku-5.5", sonnet: "sonnet-5.5", opus: "opus-5.5", argon: "argon", gemini: "argon",
+                gpt: "gpt", deepseek: "deepseek", grok: "grok"};
+// advisers, in the eyes and the thinking band while they're consulted: hues no brain uses
+const ADVISERS = {claude: [1.00, 0.70, 0.40], deepseek: [1.00, 0.52, 0.68], gpt: [0.94, 0.95, 1.00], gemini: [0.60, 1.00, 0.78]};
+
+// Any model or adviser not listed above: a color worked out from its name, so the same name always
+// gets the same color, nudged off any hue a listed one uses exactly. (Keeping wide of them all isn't
+// possible: the listed ones already cover most of the wheel, and every new name would end up green.)
+const TAKEN = [...Object.values(PALETTES).map(p => p[1]), ...Object.values(ADVISERS)]
+  .map(c => new THREE.Color(...c).getHSL({}).h);
+function hueOf(name) {
+  let h = 2166136261;  // FNV-1a, then mixed, so names alike ("grok", "groq") still land far apart
+  for (const ch of String(name).toLowerCase()) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16;
+  let hue = (h >>> 0) / 4294967296;
+  for (let i = 0; i < 12 && TAKEN.some(t => Math.min(Math.abs(t - hue), 1 - Math.abs(t - hue)) < 0.02); i++)
+    hue = (hue + 0.618034) % 1;  // the golden step: lands somewhere free soonest
+  return hue;
+}
+const named = (name, light) => new THREE.Color().setHSL(hueOf(name), light < 0.5 ? 0.75 : 1, light).toArray();
+let OWN = {};  // its colours from colors.txt: name (or part of a model's name) -> CSS colour
+const own = name => { const n = String(name).toLowerCase(); const k = Object.keys(OWN).find(k => n.includes(k)); return k && OWN[k]; };
+const shade = (css, light) => { const c = new THREE.Color(css), hsl = c.getHSL({}); return c.setHSL(hsl.h, hsl.s, light).toArray(); };
+const adviserColor = a => own(a) ? shade(own(a), 0.8) : ADVISERS[a] || named(a, 0.8);
+
+function paletteFor(model) {
+  const m = String(model).toLowerCase();
+  if (m === "private") return PALETTES.private;
+  if (own(m)) return [shade(own(m), 0.32), shade(own(m), 0.86)];
+  const family = ["haiku", "sonnet", "opus", "argon", "gemini", "gpt", "deepseek", "grok"].find(f => m.includes(f));
+  if (!family) return [named(m, 0.32), named(m, 0.86)];
+  const v = (m.match(new RegExp(family + "-(\\d+(?:[-.]\\d+)?)")) || [])[1];
+  const key = v ? `${family}-${v.replace("-", ".")}` : NEWEST[family];
+  if (PALETTES[key]) return PALETTES[key];
+  // an unlisted version: the family's newest color, its hue nudged by the version number
+  const base = PALETTES[NEWEST[family]], shift = ((parseFloat(v.replace("-", ".")) * 7.3) % 1 - 0.5) * 0.08;
+  return base.map(c => new THREE.Color(...c).offsetHSL(shift, 0, 0).toArray());
+}
+target.palette = PALETTES["haiku-5.5"];
+
+// Jugnu calls this ~30 times a second: state, its voice level, your voice level, 8 frequency bands (0..1).
+window.jugnu = {
+  colors(map) {  // from colors.txt, through face.py; a colour the browser doesn't know is skipped
+    OWN = Object.fromEntries(Object.entries(map || {}).filter(([, c]) => CSS.supports("color", c)));
+  },
+  update(mode, outLevel, inLevel, bands, gain, model, advisers) {
+    if (gain) U.uGain.value = gain;
+    if (model) lastModel = model;
+    if (model && !target.learning) target.palette = paletteFor(model);
+    target.advisers = advisers || [];
+    if (!driven) { driven = true; document.body.classList.add("driven"); U.uBoost.value = 1.45; resize(); }
+    if (mode !== target.mode) setMode(mode);
+    target.out = outLevel; target.in = inLevel;
+    if (bands) target.bands = bands;
+  },
+  learn(info) {  // learning mode: {say: the line to read, done, of}; null when it's over
+    target.learning = !!info;
+    target.done = info ? info.done / Math.max(1, info.of) : 0;
+    sayEl.textContent = info && info.say || "";
+    if (info && info.say) sayEl.appendChild(Object.assign(document.createElement("small"), {textContent: `${info.done + 1} of ${info.of}`}));
+    sayEl.classList.toggle("on", !!(info && info.say));
+    if (info) target.palette = PLAIN; else if (lastModel) target.palette = paletteFor(lastModel);
+  },
+};
+
+
+// preview audio when nothing is driving it: a believable cadence of syllables and pauses
+function preview(t) {
+  const phrase = Math.max(0, Math.sin(t * 0.9) + Math.sin(t * 0.37 + 1.3) * 0.6);
+  const voice = Math.min(1, phrase * Math.pow(Math.abs(Math.sin(t * 7.3 + Math.sin(t * 2.1) * 1.4)), 1.6) * 1.1);
+  target.out = target.mode === "talking" ? voice : 0;
+  target.in = target.mode === "listening"
+    ? Math.min(1, Math.max(0, Math.sin(t * 0.7)) * Math.pow(Math.abs(Math.sin(t * 5.1)), 2)) * 0.8 : 0;
+  target.bands = target.bands.map((_, i) => voice * (0.55 + 0.45 * Math.sin(t * (2.3 + i * 1.37) + i * 0.8)));
+}
+
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const weight = {asleep: [1,0,0,0], listening: [0,1,0,0], thinking: [0,0,1,0], talking: [0,0,0,1]};
+const clock = new THREE.Clock();
+let t = 0;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  t += dt * (reduce ? 0.4 : 1);
+  if (!driven) preview(t);
+  const ease = k => 1 - Math.exp(-dt * k);
+  const [s, l, th, tk] = weight[target.mode];
+  U.uSleep.value += (s - U.uSleep.value) * ease(3);
+  U.uListen.value += (l - U.uListen.value) * ease(3);
+  U.uThink.value += (th - U.uThink.value) * ease(3);
+  U.uTalk.value += (tk - U.uTalk.value) * ease(3);
+  U.uOut.value += (target.out - U.uOut.value) * ease(18);
+  U.uIn.value += (target.in - U.uIn.value) * ease(12);
+  U.uBands.value = U.uBands.value.map((v, i) => v + (target.bands[i] - v) * ease(16));
+  U.uTime.value = t;
+  U.uLearn.value += ((target.learning ? 1 : 0) - U.uLearn.value) * ease(2.4);
+  U.uDone.value += ((target.done || 0) - U.uDone.value) * ease(4);
+  if (target.learning) {  // the caption sits in the middle of the ring, wherever the orb is on screen
+    const c = new THREE.Vector3(0, centre, 0).project(camera);
+    sayEl.style.left = (c.x + 1) / 2 * innerWidth + "px"; sayEl.style.top = (1 - c.y) / 2 * innerHeight + "px";
+  }
+  U.uSpin.value += dt * (reduce ? 0.4 : 1) * (0.12 + 0.85 * U.uThink.value);   // quickens in thought
+  const present = target.mode === "asleep" ? 0 : 1;      // asleep, it isn't there at all
+  if (!driven) {  // preview: each brain's color in turn (or the one picked), and a consult while it "thinks"
+    target.palette = tint ? paletteFor(tint) : Object.values(PALETTES)[Math.floor(t / 24) % Object.keys(PALETTES).length];
+    target.advisers = target.mode === "thinking" ? ["deepseek", "gpt", "gemini"] : [];
+  }
+  const asking = target.advisers || [];
+  if (asking.length) U.uAccent.value.lerp(new THREE.Color(...adviserColor(asking[Math.floor(t / 1.6) % asking.length])), 1 - Math.exp(-dt * 4));
+  U.uAccentMix.value += ((asking.length ? 1 : 0) - U.uAccentMix.value) * (1 - Math.exp(-dt * 3));
+  const k = 1 - Math.exp(-dt * 2.5);  // a switch fades over about a second
+  U.uDeep.value.lerp(new THREE.Color(...target.palette[0]), k);
+  U.uBright.value.lerp(new THREE.Color(...target.palette[1]), k);
+  U.uPresence.value = Math.min(1, Math.max(0, U.uPresence.value + Math.sign(present - U.uPresence.value) * dt / (present ? 1.8 : 1.3)));
+  const pr = U.uPresence.value;
+  if (finalPass && driven) {                       // the shade follows the orb, and comes and goes with it
+    const c = new THREE.Vector3(0, centre, 0).project(camera), e = new THREE.Vector3(R * 1.25, centre, 0).project(camera);
+    finalPass.uniforms.uCenter.value.set((c.x + 1) / 2, (c.y + 1) / 2);
+    const rx = (e.x - c.x) / 2;
+    finalPass.uniforms.uRadius.value.set(rx, rx * camera.aspect);
+    finalPass.uniforms.uHaze.value = pr * pr;
+  }
+  U.uGlow.value = Math.min(1, pr * 2) * 0.55 + pr * (1 - pr) * 2.2;  // flares while it arrives or leaves
+  (composer || renderer).render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+// over the face: Ctrl + scroll resizes the window, scroll alone sets the brightness (Jugnu's window only)
+addEventListener("wheel", e => {
+  if (!window.pywebview) return;
+  e.preventDefault();
+  const up = e.deltaY < 0;
+  const api = window.pywebview.api;
+  const call = !api ? null : e.ctrlKey ? api.grow(up ? 1.07 : 1 / 1.07) : api.brighten(up ? 1.08 : 1 / 1.08);
+  if (call && call.catch) call.catch(err => api.log && api.log("wheel: " + err));
+}, {passive: false});
+addEventListener("error", e => window.pywebview?.api?.log?.(e.message));   // the page's own errors, to its log
+window.__setPreviewTime = v => { t = v; };   // lets a screenshot pick a moment
+</script>

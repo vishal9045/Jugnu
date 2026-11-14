@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up Jugnu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&family=Newsreader:opsz,wght@6..72,300&display=swap">
+<script>  // the theme before anything paints: Windows' setting arrives from setup a moment later
+  const dark = matchMedia("(prefers-color-scheme: dark)");
+  document.documentElement.dataset.theme = dark.matches ? "dark" : "light";
+  dark.addEventListener("change", e => { if (!window.fixedTheme) document.documentElement.dataset.theme = e.matches ? "dark" : "light"; });
+</script>
+<style>
+/* Two themes, one page. Light: an editorial look (warm white, a serif heading, a soft haze, the chosen
+   option turns black). Dark: a quiet tool (near-black panels, hairlines, a lavender accent, icon rows,
+   a return key on the chosen row). Every difference is a token or a rule under [data-theme=dark]. */
+:root {
+  --canvas: #f5f5f5; --card: #ffffff; --well: #f0efed; --raise: #ffffff;
+  --ink: #0c0a09; --body: #4e4e4e; --muted: #6b665f; --faint: #a8a29e;
+  --line: #e7e5e4; --line-strong: #d6d3d1;
+  --sel-bg: #0c0a09; --sel-ink: #ffffff; --sel-sub: #a8a29e;
+  --primary-bg: #292524; --primary-ink: #ffffff; --primary-hover: #0c0a09;
+  --focus: #0c0a09; --ok: #15803d; --bad: #b91c1c; --warn: #a16207;
+  --r-card: 16px; --r-ctl: 8px; --r-btn: 999px;
+  --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  --head: 300 40px/1.1 "Newsreader", Georgia, serif; --head-track: -.8px;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --canvas: #08090a; --card: #0f1011; --well: #141516; --raise: #18191a;
+  --ink: #f7f8f8; --body: #d0d6e0; --muted: #8a8f98; --faint: #62666d;
+  --line: #23252a; --line-strong: #34343a;
+  --sel-bg: #18191a; --sel-ink: #f7f8f8; --sel-sub: #8a8f98;
+  --primary-bg: #f4f4f6; --primary-ink: #08090a; --primary-hover: #ffffff;
+  --focus: #828fff; --accent: #5e6ad2; --ok: #59d499; --bad: #ff7a7a; --warn: #ffc533;
+  --r-card: 10px; --r-ctl: 8px; --r-btn: 8px;
+  --head: 600 26px/1.2 "Inter", "Segoe UI", system-ui, sans-serif; --head-track: -.5px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--canvas); color: var(--ink); font: 400 15px/1.5 var(--sans); letter-spacing: .1px;
+  -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01";
+}
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-strong); }
+a:hover { text-decoration-color: currentColor; }
+
+/* the light theme's haze: decoration only, never under a control */
+.haze { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.haze i { position: absolute; border-radius: 50%; filter: blur(30px); }
+.haze i:nth-child(1) { width: 320px; height: 260px; top: -60px; right: -110px; background: radial-gradient(closest-side, #a7e5d3, transparent); opacity: .7; }
+.haze i:nth-child(2) { width: 260px; height: 220px; top: 10px; right: 90px; background: radial-gradient(closest-side, #c8b8e0, transparent); opacity: .5; }
+.haze i:nth-child(3) { width: 220px; height: 200px; top: 90px; right: -50px; background: radial-gradient(closest-side, #f4c5a8, transparent); opacity: .55; }
+[data-theme="dark"] .haze { display: none; }
+[data-theme="dark"] .haze i { background: none; }
+header, main, footer { position: relative; z-index: 1; }
+
+/* ---- steps ---- */
+header { flex: none; padding: 20px 40px 14px; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.steps li {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted);
+  font: 600 11px/1 var(--sans); letter-spacing: .9px; text-transform: uppercase;
+}
+.steps li.done { color: var(--ink); background: var(--well); border-color: var(--well); }
+.steps li.done::before { content: "✓"; font-weight: 600; }
+.steps li[aria-current="step"] { background: var(--sel-bg); border-color: var(--sel-bg); color: var(--sel-ink); }
+[data-theme="dark"] header { padding: 14px 28px; border-bottom: 1px solid var(--line); }
+[data-theme="dark"] .steps { gap: 4px; }
+[data-theme="dark"] .steps li { font: 500 13px/1 var(--sans); letter-spacing: .1px; text-transform: none; padding: 6px 10px; border-color: transparent; }
+[data-theme="dark"] .steps li.done { background: none; color: var(--body); }
+[data-theme="dark"] .steps li.done::before { color: var(--ok); }
+[data-theme="dark"] .steps li[aria-current="step"] { background: var(--raise); border-color: var(--line-strong); }
+
+header { display: flex; align-items: center; gap: 12px; }
+header .steps { flex: 1; }
+button.theme { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border-color: var(--line); color: var(--muted); }
+button.theme:hover { color: var(--ink); }
+button.theme svg { width: 16px; height: 16px; }
+.theme .sun, [data-theme="dark"] .theme .moon { display: none; }
+[data-theme="dark"] .theme .sun { display: block; }
+[data-theme="dark"] button.theme { width: 32px; height: 32px; padding: 0; background: none; border-color: transparent; }
+[data-theme="dark"] button.theme:hover { background: var(--raise); }
+
+/* ---- page ---- */
+main { flex: 1; overflow-y: auto; overflow-x: hidden; }
+/* light: what scrolls up fades out under the steps instead of being cut off (dark has a divider line) */
+:root:not([data-theme="dark"]) main { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 20px); mask-image: linear-gradient(to bottom, transparent 0, #000 20px); }
+.wrap { max-width: 680px; padding: 32px 40px 40px; }
+[data-theme="dark"] .wrap { padding: 28px 28px 36px; }
+section { display: none; }
+section.on { display: block; }
+h1 { font: var(--head); letter-spacing: var(--head-track); margin: 0 0 12px; font-variation-settings: "opsz" 60; }
+.lede { margin: 0 0 28px; max-width: 34em; color: var(--body); font-size: 16px; }
+[data-theme="dark"] .lede { color: var(--muted); font-size: 15px; margin-bottom: 24px; }
+h2 {
+  margin: 28px 0 10px; color: var(--muted);
+  font: 600 12px/1.4 var(--sans); letter-spacing: .96px; text-transform: uppercase;
+}
+[data-theme="dark"] h2 { font: 500 14px/1.4 var(--sans); letter-spacing: .2px; text-transform: none; color: var(--ink); }
+label.field { display: block; margin: 16px 0 6px; font-size: 14px; font-weight: 500; color: var(--ink); }
+.note { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.note b { color: var(--ink); font-weight: 500; }
+.panel { margin-top: 24px; padding: 22px 24px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.panel > h2:first-child, .panel > label.field:first-child { margin-top: 0; }
+.panel > :last-child { margin-bottom: 0; }
+label.field:first-child { margin-top: 0; }
+#auth-wrap:not([hidden]) + #brain-fields:not(:empty) { margin-top: 18px; }
+#brain-fields:not(:empty) + .row-of { margin-top: 14px; }
+#brain-fields:empty + .row-of { margin-top: 0; }
+#model-wrap { margin-top: 20px; }
+#own-wrap { margin-top: 16px; }
+
+/* ---- choices (radio rows) ---- */
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opt { position: relative; display: block; cursor: pointer; min-width: 0; }
+.opt input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.row {
+  display: flex; align-items: center; gap: 12px; height: 100%; min-height: 60px; padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card);
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.opt:hover .row { border-color: var(--line-strong); box-shadow: 0 4px 16px rgba(0, 0, 0, .04); }
+.txt { flex: 1; min-width: 0; line-height: 1.35; }
+.txt b { display: block; font-weight: 500; font-size: 15px; }
+.txt span { display: block; margin-top: 1px; font-size: 13px; color: var(--muted); }
+.tile {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--well); color: var(--ink);
+}
+.tile i { font: 400 17px/1 "Newsreader", Georgia, serif; font-style: normal; }
+.tile svg { display: none; width: 16px; height: 16px; color: var(--hue); }
+.dot {
+  flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+.dot svg { width: 10px; height: 10px; opacity: 0; color: var(--ink); }
+.kbd { display: none; }
+.opt input:checked + .row { background: var(--sel-bg); border-color: var(--sel-bg); color: var(--sel-ink); }
+.opt input:checked + .row .txt span { color: var(--sel-sub); }
+.opt input:checked + .row .tile { background: #1c1917; color: #fff; box-shadow: inset 0 0 0 1px #3a3532; }
+.opt input:checked + .row .dot { background: #fff; border-color: #fff; }
+.opt input:checked + .row .dot svg { opacity: 1; color: #0c0a09; }
+.opt input:focus-visible + .row { outline: 2px solid var(--focus); outline-offset: 3px; }
+.opt input:disabled + .row { opacity: .5; cursor: not-allowed; }
+
+[data-theme="dark"] .choices { gap: 2px; padding: 6px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+[data-theme="dark"] .row { min-height: 50px; padding: 8px 10px; background: none; border-color: transparent; border-radius: 6px; }
+[data-theme="dark"] .opt:hover .row { background: var(--well); border-color: transparent; box-shadow: none; }
+[data-theme="dark"] .txt b { font-size: 14px; }
+[data-theme="dark"] .tile { border-radius: 8px; background: linear-gradient(#141516, #0d0e0f); border: 1px solid var(--line); }
+[data-theme="dark"] .tile i { display: none; }
+[data-theme="dark"] .tile svg { display: block; }
+[data-theme="dark"] .dot { width: 16px; height: 16px; border: 1.5px solid #6a6b6c; }
+[data-theme="dark"] .dot svg { display: none; }
+[data-theme="dark"] .kbd {
+  flex: none; height: 20px; min-width: 22px; padding: 1px 6px; border-radius: 4px;
+  background: linear-gradient(#141516, #0d0e0f); border: 1px solid var(--line);
+  color: var(--body); font-size: 12px; line-height: 16px; text-align: center;
+}
+[data-theme="dark"] .opt input:checked + .row { background: var(--raise); border-color: var(--line-strong); box-shadow: inset 2px 0 0 var(--accent); }
+[data-theme="dark"] .opt input:checked + .row .tile { background: linear-gradient(#141516, #0d0e0f); box-shadow: none; }
+[data-theme="dark"] .opt input:checked + .row .kbd { display: inline-block; }
+[data-theme="dark"] .opt input:checked + .row .dot { background: var(--accent); border-color: var(--accent); }
+[data-theme="dark"] .opt input:checked + .row .dot::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+[data-theme="dark"] .opt input:focus-visible + .row { outline-offset: 1px; }
+
+/* ---- the two-way choice (how you pay) ---- */
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; max-width: 100%; padding: 4px; border-radius: 999px; background: var(--well); }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; padding: 9px 16px; border-radius: 999px; font: 500 14px/1.2 var(--sans); color: var(--body); transition: background-color .15s, color .15s; }
+.seg label:hover span { color: var(--ink); }
+.seg input:checked + span { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(12, 10, 9, .08), 0 0 0 1px var(--line); }
+.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+[data-theme="dark"] .seg { background: var(--canvas); border: 1px solid var(--line); padding: 3px; }
+[data-theme="dark"] .seg input:checked + span { background: var(--raise); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04), 0 0 0 1px var(--line-strong); }
+
+/* ---- fields ---- */
+input[type=text], input[type=password], select {
+  width: 100%; height: 44px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--r-ctl);
+  background: var(--card); color: var(--ink); font: 400 15px var(--sans); transition: border-color .15s, box-shadow .15s;
+}
+input::placeholder { color: var(--muted); opacity: 1; }
+input[type=password]:not(:placeholder-shown) { letter-spacing: 2px; }
+input[type=text]:focus-visible, input[type=password]:focus-visible, select:focus-visible { outline: none; border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b665f' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+select option { background: var(--card); color: var(--ink); }
+textarea {
+  display: block; width: 100%; min-height: 96px; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-ctl);
+  background: var(--card); color: var(--ink); font: 400 15px/1.5 var(--sans); resize: vertical; transition: border-color .15s, box-shadow .15s;
+}
+textarea::placeholder { color: var(--muted); opacity: 1; }
+textarea:focus-visible { outline: none; border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+[data-theme="dark"] textarea { padding: 8px 12px; font-size: 14px; }
+[data-theme="dark"] textarea:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+[data-theme="dark"] input[type=text], [data-theme="dark"] input[type=password], [data-theme="dark"] select {
+  height: 38px; padding: 0 12px; background-color: var(--card); border-color: var(--line-strong); font-size: 14px;
+}
+[data-theme="dark"] input[type=password]:not(:placeholder-shown) { font-family: var(--mono); }
+[data-theme="dark"] select { padding-right: 34px; font-family: var(--mono); font-size: 13px; background-color: var(--well); background-position: right 12px center; }
+[data-theme="dark"] input:focus-visible, [data-theme="dark"] select:focus-visible { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+
+/* ---- buttons ---- */
+button {
+  height: 40px; padding: 0 20px; border-radius: var(--r-btn); border: 1px solid var(--line-strong);
+  background: transparent; color: var(--ink); font: 500 15px/1 var(--sans); cursor: pointer;
+  transition: background-color .15s, border-color .15s;
+}
+button:hover { border-color: var(--ink); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.primary { background: var(--primary-bg); border-color: var(--primary-bg); color: var(--primary-ink); padding: 0 28px; }
+button.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+[data-theme="dark"] button { height: 36px; padding: 0 14px; font-size: 14px; background: var(--card); border-color: var(--line); }
+[data-theme="dark"] button:hover { background: var(--raise); border-color: var(--line-strong); }
+[data-theme="dark"] button.primary { display: inline-flex; align-items: center; gap: 8px; padding: 0 10px 0 16px; background: var(--primary-bg); color: var(--primary-ink); border-color: var(--primary-bg); }
+[data-theme="dark"] button.primary::after {
+  content: "↵"; display: inline-block; min-width: 22px; height: 20px; padding: 1px 5px; border-radius: 4px;
+  background: rgba(0, 0, 0, .08); border: 1px solid rgba(0, 0, 0, .12); font-size: 12px; line-height: 16px; text-align: center;
+}
+
+.row-of { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.keyrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.keyrow input { flex: 1 1 220px; width: auto; min-width: 0; }
+
+/* ---- status lines ---- */
+.status { font: 500 14px/1.4 var(--sans); color: var(--muted); min-height: 1.4em; }
+.status.ok { color: var(--ok); } .status.bad { color: var(--bad); } .status.warn { color: var(--warn); }
+.status.ok::before { content: "✓ "; }
+
+/* ---- on/off rows (council, extras) ---- */
+.list { display: grid; gap: 8px; }
+.toggle { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.toggle input[type=checkbox] { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--ink); cursor: pointer; }
+.toggle .what { flex: 1; min-width: 0; color: var(--body); }
+.toggle .what b { color: var(--ink); font-weight: 500; }
+.toggle .what input, .toggle .what .row-of { margin-top: 10px; }
+[data-theme="dark"] .list { gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+[data-theme="dark"] .toggle { background: none; border: 0; border-radius: 0; }
+[data-theme="dark"] .toggle + .toggle { border-top: 1px solid var(--line); }
+[data-theme="dark"] .toggle input[type=checkbox] { accent-color: var(--accent); }
+
+pre.log { display: none; max-height: 140px; overflow: auto; margin: 10px 0 0; padding: 10px 12px; white-space: pre-wrap; font: 12px/1.5 var(--mono); color: var(--muted); background: var(--well); border-radius: var(--r-ctl); }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 10px 20px; margin: 0; font-size: 15px; }
+dt { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
+[data-theme="dark"] dt { text-transform: none; letter-spacing: .1px; font-weight: 500; font-size: 14px; }
+dd { margin: 0; }
+
+/* ---- footer ---- */
+footer {
+  flex: none; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 14px 40px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--canvas) 92%, transparent);
+}
+footer .end { display: flex; align-items: center; gap: 12px; min-width: 0; }
+[data-theme="dark"] footer { padding: 12px 28px; background: var(--canvas); }
+
+@media (max-width: 600px) {
+  header, [data-theme="dark"] header { padding-left: 20px; padding-right: 20px; }
+  .wrap, [data-theme="dark"] .wrap { padding: 24px 20px 32px; }
+  footer, [data-theme="dark"] footer { padding-left: 20px; padding-right: 20px; }
+  :root:not([data-theme="dark"]) h1 { font-size: 32px; letter-spacing: -.32px; }
+  .panel { padding: 18px; }
+  .row { padding: 10px 12px; gap: 10px; }
+  :root:not([data-theme="dark"]) .row .dot { display: none; }
+}
+@media (max-width: 420px) { .choices { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="g1" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/></symbol>
+  <symbol id="g2" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 8h5M8 5.5v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="g3" viewBox="0 0 16 16"><path d="M8 2l5.5 6L8 14 2.5 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="g4" viewBox="0 0 16 16"><path d="M2 11c2-6 4-6 6 0s4 6 6 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="g5" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="g6" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.8" fill="currentColor"/><circle cx="12.5" cy="3.5" r="1.8" fill="currentColor"/><circle cx="12.5" cy="12.5" r="1.8" fill="currentColor"/><path d="M5 7.2l6-3M5 8.8l6 3" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="g7" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 13.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="g8" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="4.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="2.5" y="9" width="11" height="4.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="4.75" r=".9" fill="currentColor"/><circle cx="5" cy="11.25" r=".9" fill="currentColor"/></symbol>
+</svg>
+<div class="haze" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header>
+  <ol class="steps" aria-label="Setup steps">
+    <li>you</li><li>brain</li><li>council</li><li>voice &amp; ears</li><li>extras</li><li>ready</li>
+  </ol>
+  <button class="theme" id="theme" type="button" aria-label="Switch to dark theme" title="Light or dark">
+    <svg class="moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.8A5.6 5.6 0 0 1 6.2 2.5a5.6 5.6 0 1 0 7.3 7.3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    <svg class="sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+</header>
+
+<main><div class="wrap">
+
+<section id="s-you">
+  <h1>Hello. Let's set me up.</h1>
+  <p class="lede">A few choices: who thinks, who I can ask, how I hear and speak. You can change any of it later by running setup again.</p>
+  <label class="field" for="user">What should I call you?</label>
+  <input type="text" id="user" placeholder="e.g. boss, Sam" autocomplete="off">
+  <p class="note">Optional. A nickname works if your name comes out wrong in a voice.</p>
+  <h2 id="manner-h">How should I talk to you?</h2>
+  <div class="choices" role="radiogroup" aria-labelledby="manner-h" id="manners"></div>
+  <div id="own-wrap" hidden>
+    <label class="field" for="own">In your own words</label>
+    <textarea id="own" placeholder="e.g. Talk to me like a patient teacher, and keep it light."></textarea>
+  </div>
+  <p class="note">Tone and depth only. Change it any time by telling me: "be more formal".</p>
+  <h2 id="words-h">Words I should know</h2>
+  <textarea id="words" aria-labelledby="words-h" placeholder="One per line: terms, names and places you'll say often. e.g. Nguyen"></textarea>
+  <p class="note">I'll expect these when I listen, and practise them with you when you say "switch on the learning mode".</p>
+</section>
+
+<section id="s-brain">
+  <h1>Who does the thinking?</h1>
+  <p class="lede">Pick what you already have. Every brain gets the same hands: your files, commands, a browser, and the rest.</p>
+  <div class="choices" role="radiogroup" aria-label="Brain" id="providers"></div>
+
+  <div class="panel">
+    <div id="auth-wrap" hidden>
+      <h2>How you pay for it</h2>
+      <div class="seg" role="radiogroup" aria-label="Account" id="auths"></div>
+      <p class="note" id="auth-note"></p>
+    </div>
+    <div id="brain-fields"></div>
+    <div class="row-of"><button id="check-brain">Check</button><span class="status" id="brain-status" role="status"></span></div>
+    <div id="model-wrap" hidden>
+      <label class="field" for="m-work">Model for work (reading, files, code)</label><select id="m-work"></select>
+      <label class="field" for="m-fast">Model for conversation (a quicker one answers faster)</label><select id="m-fast"></select>
+      <label class="field" for="m-deep">Model for "think hard"</label><select id="m-deep"></select>
+    </div>
+  </div>
+</section>
+
+<section id="s-council">
+  <h1>Who's on the council?</h1>
+  <p class="lede">Other models I can ask for a second opinion, or send hands-on to audit a folder. Tick the ones you have. None is fine too.</p>
+  <div class="list" id="seats">
+    <div class="toggle" id="seat-claude"><input type="checkbox" id="c-claude" aria-labelledby="c-claude-name"><div class="what"><b id="c-claude-name">Claude</b>, through Claude Code on your Claude plan
+      <div class="row-of"><button id="c-claude-login" type="button">Sign in to Claude</button><span class="status" id="c-claude-status"></span></div></div></div>
+    <div class="toggle" id="seat-gpt"><input type="checkbox" id="c-gpt" aria-labelledby="c-gpt-name"><div class="what"><b id="c-gpt-name">GPT</b>, through Codex on your ChatGPT plan
+      <div class="row-of" id="c-gpt-row"><span class="status" id="c-gpt-status"></span></div></div></div>
+    <div class="toggle" id="seat-gemini"><input type="checkbox" id="c-gemini" aria-labelledby="c-gemini-name"><div class="what"><b id="c-gemini-name">Gemini</b>, on a Gemini API key (free from <a href="#" data-open="https://aistudio.google.com/apikey">Google AI Studio</a>)
+      <input type="password" id="k-gemini" placeholder="Gemini API key" aria-label="Gemini API key" autocomplete="off"></div></div>
+    <div class="toggle" id="seat-deepseek"><input type="checkbox" id="c-deepseek" aria-labelledby="c-deepseek-name"><div class="what"><b id="c-deepseek-name">DeepSeek</b>, on a DeepSeek API key
+      <input type="password" id="k-deepseek" placeholder="DeepSeek API key" aria-label="DeepSeek API key" autocomplete="off"></div></div>
+  </div>
+  <label class="field" for="noshare">Anything they must never be sent?</label>
+  <input type="text" id="noshare" autocomplete="off" placeholder='e.g. "my day job at Acme"'>
+  <p class="note">Plain words. I'll keep it from all of them.</p>
+</section>
+
+<section id="s-senses">
+  <h1>How do I hear and speak?</h1>
+  <p class="lede">Either works for a natural conversation. On this computer, nothing you say leaves it.</p>
+  <div class="choices" role="radiogroup" aria-label="Voice and ears">
+    <label class="opt"><input type="radio" name="senses" value="google"><span class="row"><span class="txt"><b>Google</b><span>Fast, very natural. Needs a Google Cloud account with billing.</span></span></span></label>
+    <label class="opt"><input type="radio" name="senses" value="local" id="senses-local"><span class="row"><span class="txt"><b>This computer</b><span id="gpu-line">Chatterbox and Whisper on your GPU.</span></span></span></label>
+  </div>
+
+  <div class="panel" id="g-fields" hidden>
+    <h2>Voice</h2>
+    <label class="field" for="tts-key">Text-to-Speech API key</label>
+    <input type="password" id="tts-key" autocomplete="off">
+    <p class="note">A Cloud API key, restricted to Text-to-Speech.</p>
+    <label class="field" for="tts-voice">Voice</label>
+    <input type="text" id="tts-voice" placeholder="en-IN-Chirp3-HD-Algieba">
+    <div class="row-of"><button id="hear">Hear it</button><span class="status" id="hear-status" role="status"></span></div>
+    <h2>Ears</h2>
+    <label class="field" for="project">Google Cloud project ID</label>
+    <input type="text" id="project" autocomplete="off">
+    <label class="field" for="lang">Your accent</label>
+    <select id="lang"><option value="en-IN">English (India)</option><option value="en-US">English (US)</option><option value="en-GB">English (UK)</option><option value="en-AU">English (Australia)</option></select>
+    <div class="row-of"><button id="g-signin">Sign in to Google</button><button id="test-ears">Test ears</button><span class="status" id="ears-status" role="status"></span></div>
+    <p class="note">Signing in opens a window; finish it in your browser, then test. It's needed once.</p>
+  </div>
+
+  <div class="panel" id="l-fields" hidden>
+    <div class="row-of" style="margin-top:0"><button id="install-local">Install the voice and ears (a few GB)</button><span class="status" id="install-status" role="status"></span></div>
+    <pre class="log" id="install-log" aria-live="polite"></pre>
+  </div>
+
+  <div id="mic-wrap">
+    <label class="field" for="mic">Microphone</label>
+    <select id="mic"><option value="">Windows' default</option></select>
+  </div>
+</section>
+
+<section id="s-extras">
+  <h1>Extras</h1>
+  <p class="lede">All optional. Skip any you don't want; nothing breaks without them.</p>
+  <div class="list">
+    <div class="toggle"><input type="checkbox" id="x-browser" aria-labelledby="x-browser-name"><div class="what"><b id="x-browser-name">A browser</b>: I get a browser of my own, apart from yours. Sign in there to the sites you want me to use; I ask before anything I can't undo.
+      <p class="note" id="node-note"></p></div></div>
+    <div class="toggle"><input type="checkbox" id="x-google" aria-labelledby="x-google-name"><div class="what"><b id="x-google-name">Google Drive and Gmail</b>: search, read, write and draft; never delete or send.
+      <div id="x-google-fields" hidden>
+        <label class="field" for="oauth-id">OAuth client ID</label><input type="text" id="oauth-id" autocomplete="off">
+        <label class="field" for="oauth-secret">OAuth client secret</label><input type="password" id="oauth-secret" autocomplete="off">
+        <label class="field" for="g-email">Your Gmail address</label><input type="text" id="g-email" autocomplete="off">
+        <p class="note">These come from a free Google Cloud project of your own: <a href="#" data-open="README.md">steps in the README</a>, under "Google Drive and Gmail".</p>
+      </div></div></div>
+  </div>
+  <label class="field" for="reports">Where my written reports go</label>
+  <input type="text" id="reports" placeholder="Documents\Jugnu reports">
+</section>
+
+<section id="s-ready">
+  <h1>Ready.</h1>
+  <p class="lede">Here's what you chose. It's saved; run setup again to change it.</p>
+  <div class="panel" style="margin-top:0"><dl id="summary"></dl></div>
+  <div class="list" style="margin-top:16px">
+    <div class="toggle"><input type="checkbox" id="at-login" aria-labelledby="at-login-name"><div class="what"><b id="at-login-name">Start me when you log in</b>, in the system tray by the clock.</div></div>
+  </div>
+</section>
+
+</div></main>
+<footer>
+  <button id="back">Back</button>
+  <div class="end"><span class="status" id="foot-status" role="status"></span><button class="primary" id="next">Next</button></div>
+</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = t => String(t).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const STEPS = ["you", "brain", "council", "senses", "extras", "ready"];
+const PROVIDERS = [
+  {id: "claude", name: "Claude", note: "Anthropic", auths: [
+    {id: "subscription", name: "Claude Pro/Max plan"},
+    {id: "api", name: "Anthropic API key", key: "ANTHROPIC_API_KEY", hint: "Anthropic API key", note: "Billed per use on your Anthropic account."}]},
+  {id: "openai", name: "GPT", note: "OpenAI", auths: [
+    {id: "subscription", name: "ChatGPT plan", note: "Through Codex on your ChatGPT plan, no extra cost. Replies are a tad slower."},
+    {id: "api", name: "OpenAI API key", key: "OPENAI_API_KEY", hint: "OpenAI API key", note: "Billed per use. Replies are the quickest this way."}]},
+  {id: "gemini", name: "Gemini", note: "Google", auths: [{id: "api", key: "GEMINI_API_KEY", hint: "Gemini API key (free from Google AI Studio)"}]},
+  {id: "deepseek", name: "DeepSeek", auths: [{id: "api", key: "DEEPSEEK_API_KEY", hint: "DeepSeek API key"}]},
+  {id: "xai", name: "Grok", note: "xAI", auths: [{id: "api", key: "XAI_API_KEY", hint: "xAI API key"}]},
+  {id: "openrouter", name: "OpenRouter", note: "many models, one key", auths: [{id: "api", key: "OPENROUTER_API_KEY", hint: "OpenRouter API key"}]},
+  {id: "ollama", name: "Local model", note: "Ollama, on this computer", auths: [{id: "api", url: "http://localhost:11434/v1"}]},
+  {id: "custom", name: "Other server", note: "any OpenAI-style API", auths: [{id: "api", key: "JUGNU_BRAIN_KEY", hint: "its key, if it needs one", url: ""}]},
+];
+const api = () => window.pywebview.api;
+// seats on any OpenAI-style API, like the brains of the same names
+const CHAT = [
+  {id: "xai", name: "Grok", sub: "on an xAI API key", key: "XAI_API_KEY", hint: "xAI API key", model: "COUNCIL_XAI_MODEL"},
+  {id: "openrouter", name: "OpenRouter", sub: "many models, one key", key: "OPENROUTER_API_KEY", hint: "OpenRouter API key", model: "COUNCIL_OPENROUTER_MODEL"},
+  {id: "ollama", name: "Local model", sub: "through Ollama, on this computer", model: "COUNCIL_OLLAMA_MODEL"},
+  {id: "custom", name: "Other server", sub: "any OpenAI-style API", key: "COUNCIL_CUSTOM_KEY", hint: "its key, if it needs one", url: "COUNCIL_CUSTOM_URL", model: "COUNCIL_CUSTOM_MODEL"},
+];
+const SEATS = ["claude", "gpt", "gemini", "deepseek", ...CHAT.map(c => c.id)];
+const NAMES = {claude: "Claude", gpt: "GPT", gemini: "Gemini", deepseek: "DeepSeek", ...Object.fromEntries(CHAT.map(c => [c.id, c.name]))};
+const SELF = id => id === "openai" ? "gpt" : id;  // the brain doesn't sit on its own council
+document.querySelector("#seats").insertAdjacentHTML("beforeend", CHAT.map(c =>
+  `<div class="toggle" id="seat-${c.id}"><input type="checkbox" id="c-${c.id}" aria-labelledby="c-${c.id}-name"><div class="what"><b id="c-${c.id}-name">${c.name}</b>, ${c.sub}` +
+  (c.url ? `<input type="text" id="u-${c.id}" placeholder="Its address, e.g. http://localhost:8000/v1" aria-label="${c.name} address" autocomplete="off">` : "") +
+  (c.key ? `<input type="password" id="k-${c.id}" placeholder="${c.hint}" aria-label="${c.hint}" autocomplete="off">` : "") +
+  `<div class="row-of"><button type="button" id="mc-${c.id}">Check</button><select id="m-${c.id}" aria-label="${c.name} model" hidden></select><span class="status" id="s-${c.id}"></span></div>` +
+  `</div></div>`).join(""));
+async function chatModels(c) {
+  status("#s-" + c.id, "checking…");
+  const r = await api().models(c.id, "api", c.key ? $("#k-" + c.id).value.trim() : "", c.url ? $("#u-" + c.id).value.trim() : "");
+  if (!r.ok) { status("#s-" + c.id, r.error, "bad"); return; }
+  const sel = $("#m-" + c.id), keep = sel.value || env(c.model);
+  sel.innerHTML = r.models.map(() => "<option></option>").join("");
+  sel.querySelectorAll("option").forEach((o, i) => { o.textContent = o.value = r.models[i]; });  // names stay text
+  if (r.models.includes(keep)) sel.value = keep;
+  sel.hidden = !r.models.length;
+  status("#s-" + c.id, r.models.length ? `Works: ${r.models.length} models. Pick one.` : "It answered, but lists no models.", r.models.length ? "ok" : "warn");
+  $("#c-" + c.id).checked = true;
+}
+const seats = () => SEATS.filter(m => !$("#seat-" + m).hidden && $("#c-" + m).checked);
+function setTheme(t) {
+  document.documentElement.dataset.theme = t; window.fixedTheme = true;
+  $("#theme").setAttribute("aria-label", t === "dark" ? "Switch to light theme" : "Switch to dark theme");
+}
+function claudeSeat() {
+  status("#c-claude-status", "checking…");
+  api().claude_status().then(r => { status("#c-claude-status", r.ok ? "Claude is signed in." : r.error, r.ok ? "ok" : "warn"); $("#c-claude-login").hidden = r.ok; });
+}
+// a choice row: the same markup in both themes; the theme decides what shows (initial or icon, tick or dot, return key)
+const ICONS = {claude: "g1", openai: "g2", gemini: "g3", deepseek: "g4", xai: "g5", openrouter: "g6", ollama: "g7", custom: "g8"};
+const HUES = {claude: "#ffc533", openai: "#59d499", gemini: "#57c1ff", deepseek: "#7c8cff", xai: "#d0d6e0", openrouter: "#ff7a7a", ollama: "#ffc533", custom: "#59d499"};
+const tile = p => `<span class="tile" style="--hue:${HUES[p.id]}"><i>${p.name[0]}</i><svg><use href="#${ICONS[p.id]}"/></svg></span>`;
+const option = (name, value, title, sub, lead) => `<label class="opt"><input type="radio" name="${name}" value="${value}">` +
+  `<span class="row">${lead || ""}<span class="txt"><b>${title}</b>${sub ? `<span>${sub}</span>` : ""}</span>` +
+  `<span class="kbd" aria-hidden="true">↵</span><span class="dot" aria-hidden="true"><svg><use href="#i-check"/></svg></span></span></label>`;
+let info = {env: {}, gpus: [], has: {}}, step = 0, brainOk = false;
+const env = k => info.env[k] || "";
+const isSet = k => info.env[k] === "set";
+
+function status(el, text, kind) { const s = typeof el === "string" ? $(el) : el; s.textContent = text || ""; s.className = "status" + (kind ? " " + kind : ""); }
+
+// ---- brain ----
+function provider() { return PROVIDERS.find(p => p.id === (document.querySelector("input[name=prov]:checked") || {}).value); }
+function auth() { const p = provider(); if (!p) return null; const id = (document.querySelector("input[name=auth]:checked") || {}).value; return p.auths.find(a => a.id === id) || p.auths[0]; }
+
+function drawProviders() {
+  $("#providers").innerHTML = PROVIDERS.map(p => option("prov", p.id, p.name, p.note, tile(p))).join("");
+  document.querySelectorAll("input[name=prov]").forEach(r => r.addEventListener("change", drawAuth));
+}
+function drawAuth() {
+  const p = provider(); brainOk = false; $("#model-wrap").hidden = true; status("#brain-status", "");
+  $("#auth-wrap").hidden = p.auths.length < 2;
+  $("#auths").innerHTML = p.auths.map((a, i) =>
+    `<label><input type="radio" name="auth" value="${a.id}" ${i === 0 ? "checked" : ""}><span>${a.name}</span></label>`).join("");
+  document.querySelectorAll("input[name=auth]").forEach(r => r.addEventListener("change", drawFields));
+  const wanted = env("JUGNU_BRAIN_AUTH") || (p.id === "claude" && isSet("ANTHROPIC_API_KEY") && !isSet("CLAUDE_CODE_OAUTH_TOKEN") ? "api" : "");
+  const pick = document.querySelector(`input[name=auth][value="${wanted}"]`);
+  if (pick && (env("JUGNU_BRAIN") || "claude") === p.id) pick.checked = true;
+  drawFields();
+}
+function drawFields() {
+  const p = provider(), a = auth(); brainOk = false; $("#model-wrap").hidden = true; status("#brain-status", "");
+  $("#auth-note").textContent = a.note || "";
+  let html = "";
+  if (a.url !== undefined) html += `<label class="field" for="b-url">Server address</label><input type="text" id="b-url" value="${esc(env("JUGNU_BRAIN_URL") || a.url)}" placeholder="http://localhost:11434/v1">`;
+  if (a.key) html += `<label class="field" for="b-key">${a.hint}</label><input type="password" id="b-key" autocomplete="off" placeholder="${isSet(a.key) ? "already saved; paste a new one to replace it" : ""}">`;
+  if (p.id === "claude" && a.id === "subscription") html += `<div class="row-of"><button id="claude-login">Sign in to Claude</button><span class="note">Opens a window for Claude Code's sign-in; finish it in your browser, then press Check.</span></div>`;
+  if (p.id === "openai" && a.id === "subscription") html += `<div class="row-of"><button id="codex-login">Sign in to ChatGPT</button><span class="note">Opens a window for Codex's sign-in; then press Check.</span></div>`;
+  $("#brain-fields").innerHTML = html;
+  $("#claude-login") && ($("#claude-login").onclick = () => api().claude_login());
+  $("#codex-login") && ($("#codex-login").onclick = () => api().codex_login());
+  $("#check-brain").textContent = a.id === "subscription" ? "Check sign-in" : "Check";
+}
+function fill(sel, models, current, blank) {
+  const opts = (blank ? [`<option value="">${blank}</option>`] : []).concat(models.map(m => `<option ${m === current ? "selected" : ""}>${esc(m)}</option>`));
+  $(sel).innerHTML = opts.join("");
+}
+async function checkBrain() {
+  const p = provider(), a = auth(); if (!p) return;
+  status("#brain-status", "checking…");
+  const r = await api().models(p.id, a.id, ($("#b-key") || {}).value || "", ($("#b-url") || {}).value || "");
+  brainOk = !!r.ok;
+  if (!r.ok) { status("#brain-status", r.error || "That didn't work.", "bad"); return; }
+  const ms = r.models || [];
+  status("#brain-status", ms.length ? `Works: ${ms.length} models.` : "Works.", "ok"); status("#foot-status", "");
+  const same = (env("JUGNU_BRAIN") === p.id);
+  $("#model-wrap").hidden = !ms.length || p.id === "claude";
+  if (ms.length && p.id !== "claude") {
+    fill("#m-work", ms, same ? env("JUGNU_BRAIN_MODEL") : "");
+    fill("#m-fast", ms, same ? env("JUGNU_BRAIN_FAST") : "", "the same as work");
+    fill("#m-deep", ms, same ? env("JUGNU_BRAIN_DEEP") : "", "the same as work");
+  }
+}
+
+// ---- how it talks to you (personality.md): three starting points, or your own words ----
+// Colleague is its built-in manner (no file); the other two are written out as you'd say them.
+const MANNERS = [
+  {id: "colleague", name: "Colleague", sub: "A sharp peer: your field's terms, no hand-holding.", text: ""},
+  {id: "friendly", name: "Friendly", sub: "Warm and easygoing; explains in plain words.",
+   text: "Talk to me like a warm, easygoing friend who knows a lot. Explain things in plain words, keep it light, and tell me kindly when you think I'm wrong."},
+  {id: "brief", name: "Brief", sub: "Short answers; detail only when you ask.",
+   text: "Keep it short: a sentence or two unless I ask for more. Skip the small talk and get to the point."},
+  {id: "own", name: "My own words", sub: "Describe it yourself."},
+];
+const manner = () => MANNERS.find(m => m.id === (document.querySelector("input[name=manner]:checked") || {}).value) || MANNERS[0];
+const personality = () => manner().id === "own" ? $("#own").value.trim() : manner().text;
+function drawManners(saved) {
+  $("#manners").innerHTML = MANNERS.map(m => option("manner", m.id, m.name, m.sub)).join("");
+  const now = MANNERS.find(m => m.text === saved) || MANNERS[3];  // text you wrote yourself: "My own words"
+  document.querySelector(`input[name=manner][value="${now.id}"]`).checked = true;
+  if (now.id === "own") $("#own").value = saved;
+  const sync = () => { $("#own-wrap").hidden = manner().id !== "own"; };
+  document.querySelectorAll("input[name=manner]").forEach(r => r.addEventListener("change", sync));
+  sync();
+}
+
+// ---- senses ----
+function senses() { return (document.querySelector("input[name=senses]:checked") || {}).value; }
+function drawSenses() { const s = senses(); $("#g-fields").hidden = s !== "google"; $("#l-fields").hidden = s !== "local"; }
+window.progress = line => { const log = $("#install-log"); log.style.display = "block"; log.textContent += line + "\n"; log.scrollTop = log.scrollHeight; };
+window.installed = ok => { status("#install-status", ok ? "Installed." : "The install failed: see the log above.", ok ? "ok" : "bad"); $("#install-local").disabled = false; };
+
+// ---- moving between steps: each Next saves what that step set ----
+function values(i) {
+  const v = {};
+  const key = (k, el) => { const x = (el && el.value || "").trim(); if (x) v[k] = x; };  // a blank key field keeps the saved one
+  if (STEPS[i] === "you") v.JUGNU_USER = $("#user").value.trim();
+  if (STEPS[i] === "brain") {
+    const p = provider(), a = auth();
+    v.JUGNU_BRAIN = p.id; v.JUGNU_BRAIN_AUTH = a.id === "subscription" ? "subscription" : "";
+    if (a.key) key(a.key, $("#b-key"));
+    if (p.id === "claude" && a.id === "subscription") v.ANTHROPIC_API_KEY = "";  // else the API key would win
+    v.JUGNU_BRAIN_URL = a.url !== undefined ? ($("#b-url").value || "").trim() : "";
+    const own = p.id !== "claude" && a.id !== "subscription";
+    v.JUGNU_BRAIN_MODEL = own ? $("#m-work").value : ""; v.JUGNU_BRAIN_FAST = own ? $("#m-fast").value : "";
+    v.JUGNU_BRAIN_DEEP = own ? $("#m-deep").value : "";
+  }
+  if (STEPS[i] === "council") {
+    v.JUGNU_COUNCIL = seats().join(",") || "none";
+    CHAT.filter(c => $("#c-" + c.id).checked).forEach(c => {
+      if (c.key) key(c.key, $("#k-" + c.id));
+      if (c.url) v[c.url] = $("#u-" + c.id).value.trim();
+      v[c.model] = $("#m-" + c.id).value;
+    });
+    key("GEMINI_API_KEY", $("#k-gemini")); key("DEEPSEEK_API_KEY", $("#k-deepseek"));
+    v.JUGNU_NO_SHARE = $("#noshare").value.trim();
+  }
+  if (STEPS[i] === "senses") {
+    const s = senses();
+    v.JUGNU_SENSES = s === "local" ? "local" : ""; v.JUGNU_VOICE = ""; v.JUGNU_EARS = "";
+    if (s === "google") { key("GOOGLE_TTS_API_KEY", $("#tts-key")); v.JUGNU_GOOGLE_VOICE = $("#tts-voice").value.trim();
+      v.JUGNU_GOOGLE_PROJECT = $("#project").value.trim(); v.JUGNU_STT_LANGUAGE = $("#lang").value; }
+    v.JUGNU_MIC = $("#mic").value;
+  }
+  if (STEPS[i] === "extras") {
+    v.JUGNU_BROWSER = $("#x-browser").checked ? "" : "off";
+    if ($("#x-google").checked) { v.GOOGLE_OAUTH_CLIENT_ID = $("#oauth-id").value.trim(); key("GOOGLE_OAUTH_CLIENT_SECRET", $("#oauth-secret")); v.USER_GOOGLE_EMAIL = $("#g-email").value.trim(); }
+    else { v.GOOGLE_OAUTH_CLIENT_ID = ""; v.GOOGLE_OAUTH_CLIENT_SECRET = ""; v.USER_GOOGLE_EMAIL = ""; }
+    v.JUGNU_REPORTS = $("#reports").value.trim();
+  }
+  return v;
+}
+function problem(i) {  // what stops Next on this step, or nothing
+  if (STEPS[i] === "brain") {
+    if (!provider()) return "Pick a brain.";
+    if (!brainOk) return "Press Check first, so we know it works.";
+    if (!$("#model-wrap").hidden && !$("#m-work").value) return "Pick a model for work.";
+  }
+  if (STEPS[i] === "council") {
+    if ($("#c-gemini").checked && !$("#k-gemini").value && !isSet("GEMINI_API_KEY")) return "Gemini needs its key, or untick it.";
+    if ($("#c-deepseek").checked && !$("#k-deepseek").value && !isSet("DEEPSEEK_API_KEY")) return "DeepSeek needs its key, or untick it.";
+    for (const c of CHAT) {
+      if (!$("#c-" + c.id).checked || $("#seat-" + c.id).hidden) continue;
+      if (c.key && c.id !== "custom" && !$("#k-" + c.id).value && !isSet(c.key)) return `${c.name} needs its key, or untick it.`;
+      if (c.url && !$("#u-" + c.id).value.trim()) return `${c.name} needs its address, or untick it.`;
+      if (!$("#m-" + c.id).value) return `${c.name}: press Check, then pick a model.`;
+    }
+  }
+  if (STEPS[i] === "senses" && !senses()) return "Pick one.";
+  return "";
+}
+function summary() {
+  const p = provider(), a = auth(), s = senses();
+  const council = seats().map(m => NAMES[m] + (CHAT.some(c => c.id === m) ? ` (${$("#m-" + m).value})` : ""));
+  const rows = [
+    ["call you", $("#user").value.trim() || "by name"],
+    ["manner", manner().name],
+    ["brain", p.name + (p.auths.length > 1 ? ` (${a.name})` : "") + (!$("#model-wrap").hidden && $("#m-work").value ? `, ${$("#m-work").value}` : "")],
+    ["council", council.join(", ") || "none"],
+    ["voice & ears", {google: "Google", local: "this computer"}[s]],
+    ["browser", $("#x-browser").checked ? "yes" : "no"],
+    ["drive & gmail", $("#x-google").checked ? "yes" : "no"],
+  ];
+  $("#summary").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd></dd>`).join("");
+  $("#summary").querySelectorAll("dd").forEach((dd, i) => dd.textContent = rows[i][1]);  // typed text stays text
+}
+function show(i) {
+  step = i;
+  document.querySelectorAll("section").forEach((s, k) => s.classList.toggle("on", k === i));
+  document.querySelectorAll(".steps li").forEach((li, k) => { li.classList.toggle("done", k < i); li.toggleAttribute("aria-current", k === i); if (k === i) li.setAttribute("aria-current", "step"); });
+  $("#back").disabled = i === 0;
+  $("#next").textContent = i === STEPS.length - 1 ? "Start Jugnu" : "Next";
+  status("#foot-status", "");
+  if (STEPS[i] === "ready") summary();
+  if (STEPS[i] === "council") SEATS.forEach(m => $("#seat-" + m).hidden = SELF(provider() && provider().id) === m);
+  $("main").scrollTop = 0;
+}
+$("#next").onclick = async () => {
+  if (step === STEPS.length - 1) { $("#next").disabled = true; await api().start($("#at-login").checked); return; }
+  const why = problem(step); if (why) { status("#foot-status", why, "warn"); return; }
+  const v = values(step);
+  if (window.pickedTheme) v.JUGNU_THEME = window.pickedTheme;
+  await api().save(v);
+  if (STEPS[step] === "you") { await api().set_personality(personality()); await api().set_words($("#words").value); }
+  Object.keys(v).forEach(k => { if (/KEY|TOKEN|SECRET/.test(k)) info.env[k] = v[k] ? "set" : ""; });  // later steps see it saved
+  show(step + 1);
+};
+$("#theme").onclick = () => { window.pickedTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; setTheme(window.pickedTheme); };
+$("#c-claude-login").onclick = async () => { await api().claude_login(); status("#c-claude-status", "Finish signing in in your browser…", "warn");
+  let tries = 0; const poll = setInterval(async () => { const r = await api().claude_status(); if (r.ok || ++tries > 36) { clearInterval(poll); claudeSeat(); } }, 5000); };
+CHAT.forEach(c => $("#mc-" + c.id).onclick = () => chatModels(c));
+$("#back").onclick = () => show(Math.max(0, step - 1));
+$("#check-brain").onclick = checkBrain;
+document.addEventListener("change", () => status("#foot-status", ""));  // a new choice clears the old warning
+document.addEventListener("click", e => { const t = e.target.closest("[data-open]"); if (t) { e.preventDefault(); api().open(t.dataset.open); } });
+document.querySelectorAll("input[name=senses]").forEach(r => r.addEventListener("change", drawSenses));
+$("#hear").onclick = async () => { status("#hear-status", "…"); const r = await api().test_voice($("#tts-key").value, $("#tts-voice").value); status("#hear-status", r.ok ? "Did you hear it?" : r.error, r.ok ? "ok" : "bad"); };
+$("#g-signin").onclick = async () => { const r = await api().google_signin(); if (!r.ok) status("#ears-status", r.error, "bad"); };
+$("#test-ears").onclick = async () => { status("#ears-status", "connecting…"); const r = await api().test_ears($("#project").value.trim(), $("#lang").value); status("#ears-status", r.ok ? "Ears work." + (r.note ? " " + r.note : "") : r.error, r.ok ? "ok" : "bad"); };
+$("#install-local").onclick = async () => { $("#install-local").disabled = true; $("#install-log").textContent = ""; status("#install-status", "installing… this takes a while", "warn"); await api().install_local(); };
+$("#x-google").onchange = () => $("#x-google-fields").hidden = !$("#x-google").checked;
+
+window.addEventListener("pywebviewready", async () => {
+  info = await api().info();
+  $("#at-login").checked = !!info.at_login;  // as it is now: ticking starts it at login, unticking stops that
+  setTheme(info.theme || document.documentElement.dataset.theme);  // what you picked last time, else Windows' own setting
+  drawProviders();
+  const current = document.querySelector(`input[name=prov][value="${env("JUGNU_BRAIN") || "claude"}"]`);
+  if (current && (env("JUGNU_BRAIN") || isSet("CLAUDE_CODE_OAUTH_TOKEN") || isSet("ANTHROPIC_API_KEY"))) { current.checked = true; drawAuth(); }
+  $("#user").value = env("JUGNU_USER");
+  drawManners(info.personality || "");
+  $("#words").value = (info.words || []).join("\n");
+  // council: what's saved, else what's ready to go
+  const members = (env("JUGNU_COUNCIL") || "").split(",").filter(Boolean);
+  ["gpt", "gemini", "deepseek"].forEach(m => $("#c-" + m).checked = env("JUGNU_COUNCIL") ? members.includes(m)
+    : m === "gpt" ? info.has.codex : isSet(m.toUpperCase() + "_API_KEY"));
+  $("#c-claude").checked = members.includes("claude");
+  CHAT.forEach(c => {
+    $("#c-" + c.id).checked = members.includes(c.id);
+    if (c.key && isSet(c.key)) $("#k-" + c.id).placeholder = "already saved; paste a new one to replace it";
+    if (c.url) $("#u-" + c.id).value = env(c.url);
+    if (env(c.model)) { const o = document.createElement("option"); o.textContent = o.value = env(c.model); $("#m-" + c.id).append(o); $("#m-" + c.id).hidden = false; }
+  });
+  claudeSeat();
+  ["gemini", "deepseek"].forEach(m => { if (isSet(m.toUpperCase() + "_API_KEY")) $("#k-" + m).placeholder = "already saved; paste a new one to replace it"; });
+  $("#noshare").value = env("JUGNU_NO_SHARE");
+  if (!info.has.codex) { $("#c-gpt").disabled = true; status("#c-gpt-status", "Codex isn't installed (npm install -g @openai/codex), so GPT can't sit in.", "warn"); }
+  else api().codex_status().then(r => status("#c-gpt-status", r.ok ? "Codex is signed in." : "Codex isn't signed in yet: sign in on the brain step, or run codex login.", r.ok ? "ok" : "warn"));
+  // voice & ears: local only offered with an NVIDIA GPU
+  const gpu = info.gpus[0];
+  if (!gpu) { $("#senses-local").disabled = true; $("#gpu-line").textContent = "Needs an NVIDIA GPU; none found here."; }
+  else $("#gpu-line").textContent = `On your ${gpu.name} (${(gpu.free / 1024).toFixed(1)} GB free; it needs about 4).`;
+  const saved = env("JUGNU_SENSES") === "local" ? "local"
+    : (isSet("GOOGLE_TTS_API_KEY") || env("JUGNU_GOOGLE_PROJECT")) ? "google" : "";
+  if (saved) { document.querySelector(`input[name=senses][value="${saved}"]`).checked = true; }
+  drawSenses();
+  $("#tts-voice").value = env("JUGNU_GOOGLE_VOICE"); $("#project").value = env("JUGNU_GOOGLE_PROJECT");
+  if (env("JUGNU_STT_LANGUAGE")) $("#lang").value = env("JUGNU_STT_LANGUAGE");
+  if (isSet("GOOGLE_TTS_API_KEY")) $("#tts-key").placeholder = "already saved; paste a new one to replace it";
+  if (!info.windows) $("#mic option").textContent = "the default";
+  const mics = await api().mics();
+  $("#mic").innerHTML += mics.map(m => `<option></option>`).join("");
+  $("#mic").querySelectorAll("option").forEach((o, i) => { if (i) { o.textContent = mics[i - 1]; o.value = mics[i - 1]; } });
+  $("#mic").value = env("JUGNU_MIC");
+  // extras
+  $("#x-browser").checked = env("JUGNU_BROWSER") !== "off" && info.has.node;
+  $("#x-browser").disabled = !info.has.node;
+  $("#node-note").innerHTML = info.has.node ? 'It uses the Chrome installed on this computer. Say "hide the browser" to put its window out of sight.'
+    : 'Needs Node.js first: <a href="#" data-open="https://nodejs.org">nodejs.org</a>, then run setup again.';
+  $("#x-google").checked = !!env("GOOGLE_OAUTH_CLIENT_ID"); $("#x-google-fields").hidden = !$("#x-google").checked;
+  $("#oauth-id").value = env("GOOGLE_OAUTH_CLIENT_ID"); $("#g-email").value = env("USER_GOOGLE_EMAIL");
+  if (isSet("GOOGLE_OAUTH_CLIENT_SECRET")) $("#oauth-secret").placeholder = "already saved";
+  $("#reports").value = env("JUGNU_REPORTS");
+  show(0);
+});
+</script>
+</body>
+</html>
